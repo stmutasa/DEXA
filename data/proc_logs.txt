@@ -1,0 +1,20 @@
+Done, made 40224160 bounding boxes from 461 hips in 597 patients. 70596 Positive and 40153564 Negative (569.7795909116663 %)
+
+Made 6525836 (2935607) bounding boxes SO FAR from 100 patients. 11726 Positive and 6514110 Negative (0.179686 %)
+
+Made 10078683 (3552847) bounding boxes SO FAR from 150 patients. 17612 Positive and 10061071 Negative (0.174745 %)
+
+Made 13548565 (3469882) bounding boxes SO FAR from 200 patients. 22633 Positive and 13525932 Negative (0.167051 %)
+
+Made 16916477 (3367912) bounding boxes SO FAR from 250 patients. 27735 Positive and 16888742 Negative (0.163953 %)
+Dexa score error:  '402949063'
+
+Made 20566957 (3650480) bounding boxes SO FAR from 300 patients. 33395 Positive and 20533562 Negative (0.162372 %)
+
+Made 23765456 (3198499) bounding boxes SO FAR from 350 patients. 40017 Positive and 23725439 Negative (0.168383 %)
+
+Made 26878964 (3113508) bounding boxes SO FAR from 400 patients. 45559 Positive and 26833405 Negative (0.169497 %)
+
+Made 29637781 (2758817) bounding boxes SO FAR from 450 patients. 51137 Positive and 29586644 Negative (0.172540 %)
+
+Made 33001719 (3363938) bounding boxes SO FAR from 500 patients. 56809 Positive and 32944910 Negative (0.172140 %)
