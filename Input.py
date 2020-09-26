@@ -319,10 +319,10 @@ def load_protobuf_loc(training=True):
     if training:
 
         # Define our undersample and oversample filtering functions
-        _filter_fn = lambda x: sdl.undersample_filter(x['box_data'][19], actual_dists=[0.999, 0.00156], desired_dists=[.9, .1])
+        _filter_fn = lambda x: sdl.undersample_filter(x['box_data'][19], actual_dists=[0.999, 0.00156], desired_dists=[.99, .01])
         _undersample_filter = lambda x: dataset.filter(_filter_fn)
         _oversample_filter = lambda x: tf.data.Dataset.from_tensors(x).repeat(
-            sdl.oversample_class(x['box_data'][19], actual_dists=[0.9982, 0.001755], desired_dists=[.9, .1]))
+            sdl.oversample_class(x['box_data'][19], actual_dists=[0.9982, 0.001755], desired_dists=[.99, .01]))
 
         # Large shuffle, repeat for xx epochs then parse the labels only
         dataset = dataset.shuffle(buffer_size=int(5e5))
@@ -421,7 +421,7 @@ class DataPreprocessor(object):
 
         # Data Augmentation ------------------ Flip, Contrast, brightness, noise
 
-        # Save the data to [0ymin, 1xmin, 2ymax, 3xmax, cny, cnx, 6height, 7width, 8origshapey, 9origshapex,
+        # Saved the data to [0ymin, 1xmin, 2ymax, 3xmax, cny, cnx, 6height, 7width, 8origshapey, 9origshapex,
         #    10yamin, 11xamin, 12yamax, 13xamax, 14acny, 15acnx, 16aheight, 17awidth, 18IOU, 19obj_class, 20#_class]
 
         # Resize to network size
@@ -446,19 +446,19 @@ class DataPreprocessor(object):
         # Create a poisson noise array
         noise = tf.random.uniform(shape=[FLAGS.network_dims, FLAGS.network_dims, 1], minval=-T_noise, maxval=T_noise)
 
-        # Normalize the image
-        image = tf.image.per_image_standardization(image)
-        image = tf.add(image, noise)
+        # # Normalize the image
+        # image = tf.image.per_image_standardization(image)
+        # image = tf.add(image, noise)
 
         # Add the poisson noise
-        #image = tf.add(image, tf.cast(noise, tf.float16))
+        image = tf.add(image, tf.cast(noise, tf.float16))
 
     else: # Validation
 
         image = tf.expand_dims(image, -1)
 
-        # Normalize the image
-        image = tf.image.per_image_standardization(image)
+        # # Normalize the image
+        # image = tf.image.per_image_standardization(image)
 
         # Resize to network size
         image = tf.image.resize_images(image, [FLAGS.network_dims, FLAGS.network_dims], tf.compat.v1.image.ResizeMethod.BICUBIC)
