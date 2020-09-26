@@ -12,10 +12,10 @@ import SODLoader as SDL
 from Input import sdd as sdd
 
 # Define the data directory to use
-home_dir = '/home/stmutasa/Code/Datasets/Scaphoid/'
-tfrecords_dir = home_dir + 'tfrecords/train/'
+home_dir = '/home/stmnarf316/PycharmProjects/DEXA/data'
+tfrecords_dir = home_dir + '/train/'
 
-sdl= SDL.SODLoader('/home/stmutasa/Code/Datasets/Scaphoid/')
+sdl= SDL.SODLoader('/home/stmnarf316/PycharmProjects/DEXA/data')
 
 
 # Define flags
@@ -31,10 +31,10 @@ tf.app.flags.DEFINE_string('net_type', 'RPNC', """Network predicting CEN, BBOX o
 
 # Define some of the immutable variables
 tf.app.flags.DEFINE_integer('num_epochs', 202, """Number of epochs to run""")
-tf.app.flags.DEFINE_integer('epoch_size', 19237152, """10 Million in train set""")
+tf.app.flags.DEFINE_integer('epoch_size', 30145477, """30 Million in train set""")
 tf.app.flags.DEFINE_integer('print_interval', 1, """How often to print a summary to console during training""")
 tf.app.flags.DEFINE_float('checkpoint_interval', 5, """How many Epochs to wait before saving a checkpoint""")
-tf.app.flags.DEFINE_integer('batch_size', 1280, """Number of images to process in a batch.""")
+tf.app.flags.DEFINE_integer('batch_size', 512, """Number of images to process in a batch.""")
 
 # Hyperparameters:
 tf.app.flags.DEFINE_float('dropout_factor', 0.75, """ Keep probability""")
@@ -48,8 +48,8 @@ tf.app.flags.DEFINE_float('beta2', 0.999, """ The beta 1 value for the adam opti
 
 # Directory control
 tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory to write event logs and save checkpoint files""")
-tf.app.flags.DEFINE_string('RunInfo', 'RPN_FL6/', """Unique file name for this training run""")
-tf.app.flags.DEFINE_integer('GPU', 1, """Which GPU to use""")
+tf.app.flags.DEFINE_string('RunInfo', 'RPN_FL1/', """Unique file name for this training run""")
+tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
 
 
 def train():
@@ -73,10 +73,10 @@ def train():
 
         # Labels and logits
         labels = data['box_data']
-        logits = tf.nn.softmax(all_logits[0])
+        logits = tf.nn.softmax(all_logits)
 
         # Calculate loss
-        combined_loss, class_loss, loc_loss = network.total_loss(all_logits, labels)
+        combined_loss = network.total_loss(all_logits, labels)
 
         # Add the L2 regularization loss
         loss = tf.add(combined_loss, l2loss, name='TotalLoss')
@@ -124,11 +124,11 @@ def train():
             mon_sess.run(var_init)
             mon_sess.run(iterator.initializer)
 
-            # TODO: Restore the model
-            ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir + FLAGS.RunInfo)
-            saver.restore(mon_sess, ckpt.model_checkpoint_path)
-            print ('Model restored: ', ckpt.model_checkpoint_path)
-            start_step = 751451
+            # # TODO: Restore the model
+            # ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir + FLAGS.RunInfo)
+            # saver.restore(mon_sess, ckpt.model_checkpoint_path)
+            # print ('Model restored: ', ckpt.model_checkpoint_path)
+            # start_step = 751451
 
             # Initialize the handle to the summary writer in our training directory
             summary_writer = tf.summary.FileWriter(FLAGS.train_dir + FLAGS.RunInfo, mon_sess.graph)
@@ -140,8 +140,8 @@ def train():
             mon_sess.graph.finalize()
 
             # No queues!
-            # for i in range(max_steps):
-            for i in range(start_step, max_steps, 1):
+            for i in range(max_steps):
+            #for i in range(start_step, max_steps, 1):
 
                 # Run and time an iteration
                 start = time.time()
@@ -164,7 +164,7 @@ def train():
 
                         # Load some metrics
                         _lbls, _logs, _combinedLoss, _clsLoss, _locLoss, _l2loss, _totLoss, _id = mon_sess.run([
-                            labels, logits, combined_loss, class_loss, loc_loss, l2loss, loss, data['view']],
+                            labels, logits, combined_loss, l2loss, loss, data['view']],
                             feed_dict={phase_train: True})
 
                         # Make losses display in ppt
@@ -229,7 +229,7 @@ def train():
                         summary_writer.add_summary(summary, i)
 
                         # Garbage cleanup
-                        del _lbls, _logs, _combinedLoss, _clsLoss, _locLoss, _l2loss, _totLoss, _id
+                        del _lbls, _logs, _combinedLoss, _clsLoss, _l2loss, _totLoss, _id
 
                     if i % checkpoint_interval == 0:
 
@@ -254,9 +254,9 @@ def train():
 
 
 def main(argv=None):
-    # if tf.gfile.Exists(FLAGS.train_dir + FLAGS.RunInfo):
-    #     tf.gfile.DeleteRecursively(FLAGS.train_dir + FLAGS.RunInfo)
-    # tf.gfile.MakeDirs(FLAGS.train_dir + FLAGS.RunInfo)
+    if tf.gfile.Exists(FLAGS.train_dir + FLAGS.RunInfo):
+        tf.gfile.DeleteRecursively(FLAGS.train_dir + FLAGS.RunInfo)
+    tf.gfile.MakeDirs(FLAGS.train_dir + FLAGS.RunInfo)
     train()
 
 
