@@ -12,10 +12,10 @@ import SODLoader as SDL
 from Input import sdd as sdd
 
 # Define the data directory to use
-home_dir = '/home/stmutasa/Code/Datasets/Scaphoid/'
-tfrecords_dir = home_dir + 'tfrecords/train/'
+home_dir = '/data/Datasets/DEXA/data/'
+tfrecords_dir = home_dir + 'train/'
 
-sdl= SDL.SODLoader('/home/stmutasa/Code/Datasets/Scaphoid/')
+sdl= SDL.SODLoader('/data/Datasets/DEXA/')
 
 
 # Define flags

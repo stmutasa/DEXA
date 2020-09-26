@@ -1,12 +1,12 @@
 """
-Code to generate proposal boxes of the scaphoid from raw inputs
+Code to generate proposal boxes of ward's triangle from raw inputs based on the trained localization network
 """
 
 import numpy as np
 #import cupy as cp
 import numpy as cp
 import tensorflow as tf
-import time
+import time, os
 
 import Utils
 import SODLoader as SDL
@@ -23,20 +23,20 @@ import matplotlib.pyplot as plt
 FLAGS = tf.app.flags.FLAGS
 
 # Define the data directory to use
-home_dir = '/home/stmutasa/Code/Datasets/Scaphoid/'
+home_dir = '/data/Datasets/DEXA/'
 tfrecords_dir = home_dir + 'tfrecords/temp1/'
 
-test_loc_folder = home_dir + 'Test/'
-cleanCR_folder = home_dir + 'Cleaned_CR/A2/'
-hedgeCR_folder = home_dir + 'Cleaned_CR_Hedge/'
 label_folder = home_dir + 'Labels/'
+rawCR_dir = home_dir + 'Raw/'
+test_loc_folder = home_dir + 'Test/'
+cleanCR_folder = home_dir + 'Cleaned_CR/'
+
 
 sdl = SDL.SODLoader(data_root=home_dir)
 sdd = SDD.SOD_Display()
 
 # Define some of the data variables
-tf.app.flags.DEFINE_string('data_dir', tfrecords_dir, """Path to the data directory.""")
-tf.app.flags.DEFINE_string('training_dir', 'training/', """Path to the training directory.""")
+tf.app.flags.DEFINE_string('data_dir', tfrecords_dir, """Path to the temporary protobuff save""")
 tf.app.flags.DEFINE_integer('box_dims', 64, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 64, """dimensions of the network input""")
 
@@ -46,28 +46,29 @@ tf.app.flags.DEFINE_float('moving_avg_decay', 0.999, """ The decay rate for the 
 
 # Directory control
 tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory where to retrieve checkpoint files""")
-tf.app.flags.DEFINE_string('net_type', 'RPNC', """Network predicting CEN or BBOX""")
-tf.app.flags.DEFINE_string('RunInfo', 'RPN_FL6/', """Unique file name for this training run""")
+tf.app.flags.DEFINE_string('RunInfo', 'RPN_FL1/', """The localization network we will use""")
 tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
 
 
-def execute():
+def generate_object_proposals(train=True):
 
     """
     loads the raw images. Generates anchors, Runs anchors, Filters anchors, Saves outputs
+    :parameter train: Are we generating from the training or testing folder
     :return:
     """
 
-    # Load the labels and files and randomly shuffle them
-    labels = sdl.load_CSV_Dict('Accno', path=label_folder + 'Test_Lbls.csv')
-    labels.update(sdl.load_CSV_Dict('Accno', path=label_folder + 'Test_Lbls_EZ.csv'))
-    filenames = sdl.retreive_filelist('dcm', True, cleanCR_folder)
-    totimg = len(filenames)
-    print ('Found %s image files and %s test labels, ...starting' %(totimg, len(labels)))
-    time.sleep(3)
+    # Load the labels and files
+    Labels = sdl.load_CSV_Dict('Mrn', 'Dexa_Scores.csv')
 
-    # Load the labels
-    Train_labels = sdl.load_CSV_Dict('Accno', path=label_folder + 'Train_Lbls.csv')
+    # Separate training and testing by just using separate folders this time
+    if train: filenames = sdl.retreive_filelist('dcm', True, cleanCR_folder + 'train/')
+    else: filenames = sdl.retreive_filelist('dcm', True, cleanCR_folder + 'test/')
+
+    # Display info
+    totimg = len(filenames)
+    print ('Found %s image files and %s test labels, ...starting' %(totimg, len(Labels)))
+    time.sleep(3)
 
     # Global variables
     data, index, procd, counter =  {}, 0, 0, [0, 0]
@@ -75,15 +76,8 @@ def execute():
 
     for file in filenames:
 
-        # Skip if the this is a test file
-        test_acc = file.split('/')[-2]
-        try:
-            _ = labels[test_acc]
-            continue
-        except: pass
-
         # Save protobuff and get epoch size
-        try: epoch_size, ID, cls = pre_proc_localizations(64, file, Train_labels, group='train')
+        try: epoch_size, ID, cls = pre_proc_localizations(64, file, Labels, group='train')
         except: continue
 
         # Get factors of epoch size for batch size and return number closest to 1k
@@ -98,11 +92,8 @@ def execute():
         result_dict, index = inference(iterator, epoch_size, batch_size, index)
 
         # Keep only the top x proposals from the dict
-        top_n = 5
+        top_n = 20
         if len(result_dict) >= top_n:
-
-            # Double up on the positives
-            if result_dict[index-1]['box_data'][20] == 1 and len(result_dict) >top_n*2: top_n *= 2
 
             # Sort items by obj_prob in iterated list. Use reverse to get biggest first, take n with slicing then make dict
             result_dict = dict(sorted(result_dict.items(), key=lambda x: x[1]['obj_prob'], reverse=True)[:top_n])
@@ -115,13 +106,11 @@ def execute():
         # Merge dictionaries
         data.update(result_dict)
 
-        #TODO: Add code here to generate 5-10 dummy boxes that contain no scaphoid
-
         # Update count
         counter[cls] += len(result_dict)
 
         # Display
-        print ('\n *** Made %s boxes of the scaphoid from %s proposals in image %s (IMG %s of %s, Objects so far: %s)*** \n'
+        print ('\n *** Made %s boxes of wards triangle from %s proposals in image %s (IMG %s of %s, Objects so far: %s)*** \n'
                %(len(result_dict), epoch_size, ID, procd, totimg, counter))
 
         # Garbage and tracking
@@ -132,157 +121,7 @@ def execute():
     # Done with all patients, save
     print('\nMade %s Object Proposal boxes from %s Test images, Avg %s.' % (len(data), procd, len(data)//procd))
     sdl.save_dict_filetypes(data[next(iter(data))], (tfrecords_dir + 'filetypes'))
-    sdl.save_segregated_tfrecords(5, data, 'accno', file_root=('%sObjects' % tfrecords_dir))
-
-
-def execute_hedge():
-
-    """
-    loads the raw images. Generates anchors, Runs anchors, Filters anchors, Saves outputs
-    :return:
-    """
-
-    # Load the labels and files and randomly shuffle them
-    labels = sdl.load_CSV_Dict('Accno', path=label_folder + 'Test_Lbls.csv')
-    labels.update(sdl.load_CSV_Dict('Accno', path=label_folder + 'Test_Lbls_EZ.csv'))
-    filenames = sdl.retreive_filelist('dcm', True, hedgeCR_folder)
-    shuffle(filenames)
-    totimg = len(filenames)
-    print ('Found %s image files and %s test labels, ...starting' %(totimg, len(labels)))
-    time.sleep(1)
-
-    # Load the labels
-    Train_labels = sdl.load_CSV_Dict('Accno', path=label_folder + 'Train_Lbls.csv')
-
-    # Global variables
-    data, index, procd, counter =  {}, int(1e6), 0, [0, 0]
-    tot_props = 0
-
-    for file in filenames:
-
-        # Skip if the this is a test file
-        test_acc = file.split('/')[-2]
-        try:
-            _ = labels[test_acc]
-            continue
-        except: pass
-
-        # Save protobuff and get epoch size
-        try: epoch_size, ID, cls = pre_proc_localizations(64, file, Train_labels, group='hedge')
-        except: continue
-
-        # Get factors of epoch size for batch size and return number closest to 1k
-        ep_factors = factors(epoch_size)
-        batch_size = min(ep_factors, key=lambda x: abs(x - 3000))
-        if batch_size < 100 or batch_size > 6000: batch_size = 100
-
-        # Load this patient
-        iterator = load_protobuf(batch_size)
-
-        # Run the patient through
-        result_dict, index = inference(iterator, epoch_size, batch_size, index)
-
-        # Keep only the top x proposals from the dict. TODO: Triple represent hedges
-        top_n = 15
-        if len(result_dict) >= top_n:
-
-            # Double up on the positives
-            if result_dict[index-1]['box_data'][20] == 1:
-                if len(result_dict) >top_n*2: top_n *= 2
-                else: top_n = len(result_dict)
-
-            # Sort items by obj_prob in iterated list. Use reverse to get biggest first, take n with slicing then make dict
-            result_dict = dict(sorted(result_dict.items(), key=lambda x: x[1]['obj_prob'], reverse=True)[:top_n])
-
-        # Merge dictionaries
-        data.update(result_dict)
-
-        # Update count
-        counter[cls] += len(result_dict)
-
-        # Display
-        print ('\n *** Made %s Hedged boxes of the scaphoid from %s proposals in image %s (IMG %s of %s, Objects so far: %s)*** \n'
-               %(len(result_dict), epoch_size, ID, procd, totimg, counter))
-
-        # Garbage and tracking
-        procd += 1
-        tot_props += epoch_size
-        del result_dict, iterator
-
-    # Done with all patients, save
-    print('\nMade %s Object Proposal boxes from %s Hedge images, Avg %s.' % (len(data), procd, len(data)//procd))
-    sdl.save_segregated_tfrecords(2, data, 'accno', file_root=('%sHedge' % tfrecords_dir))
-
-
-def execute_Test():
-
-    """
-    loads the raw images. Generates anchors, Runs anchors, Filters anchors, Saves outputs
-    :return:
-    """
-
-    # Load the labels and files and randomly shuffle them
-    labels = sdl.load_CSV_Dict('Accno', path=label_folder + 'Test_Lbls.csv')
-    labels.update(sdl.load_CSV_Dict('Accno', path=label_folder + 'Test_Lbls_EZ.csv'))
-    filenames = sdl.retreive_filelist('dcm', True, cleanCR_folder) + sdl.retreive_filelist('dcm', True, hedgeCR_folder)
-    shuffle(filenames)
-    totimg = len(filenames)
-    print ('Found %s image files and %s test labels, ...starting' %(totimg, len(labels)))
-    time.sleep(3)
-
-    # Global variables
-    data, index, procd, counter =  {}, 0, 0, [0, 0]
-    tot_props = 0
-
-    for file in filenames:
-
-        # Skip if the this is NOT a test file
-        test_acc = file.split('/')[-2]
-        try:
-            _ = labels[test_acc]
-            pass
-        except: continue
-
-        # Save protobuff and get epoch size
-        try: epoch_size, ID, cls = pre_proc_localizations(64, file, labels, group='test')
-        except: continue
-
-        # Get factors of epoch size for batch size and return number closest to 1k
-        ep_factors = factors(epoch_size)
-        batch_size = min(ep_factors, key=lambda x: abs(x - 3000))
-        if batch_size < 100 or batch_size > 6000: batch_size = 100
-
-        # Load this patient
-        iterator = load_protobuf(batch_size)
-
-        # Run the patient through
-        result_dict, index = inference(iterator, epoch_size, batch_size, index)
-
-        # Keep only the top x proposals from the dict
-        top_n = 5
-        if len(result_dict) >= top_n:
-
-            # Sort items by obj_prob in iterated list. Use reverse to get biggest first, take n with slicing then make dict
-            result_dict = dict(sorted(result_dict.items(), key=lambda x: x[1]['obj_prob'], reverse=True)[:top_n])
-
-        # Merge dictionaries
-        data.update(result_dict)
-
-        # Update count
-        counter[cls] += len(result_dict)
-
-        # Display
-        print ('\n *** Made %s Test boxes of the scaphoid from %s proposals in image %s (IMG %s of %s, Objects so far: %s) *** \n'
-               %(len(result_dict), epoch_size, ID, procd, totimg, counter))
-
-        # Garbage and tracking
-        procd += 1
-        tot_props += epoch_size
-        del result_dict, iterator
-
-    # Done with all patients, save
-    print('\nMade %s Object Proposal boxes from %s Test images, Avg %s.' % (len(data), procd, len(data)//procd))
-    sdl.save_tfrecords(data, 1, file_root=('%sTest' % tfrecords_dir))
+    sdl.save_segregated_tfrecords(5, data, 'accno', file_root='data')
 
 
 def factors(n):
@@ -294,7 +133,7 @@ def factors(n):
 def pre_proc_localizations(box_dims, file, labels, group='proposals'):
 
     """
-    Pre processes the input for the classification
+    Prepares the inputs for the classification network
     :param box_dims: dimensions of the saved images
     :param file: the patient to work on
     :return:
@@ -311,35 +150,46 @@ def pre_proc_localizations(box_dims, file, labels, group='proposals'):
         return
 
     # Set destination filename info
-    dst_File = accno + '_' + laterality + '-' + part + '_' + view
+    #dst_File = accno + '_' + laterality + '-' + part + '_' + view
+    dst_File = os.path.basename(file).split('.')[0] + '.png'
 
-    # Get the label
-    try: fracture_class = int(labels[accno]['Lbl'])
-    except:
-        print('Error: Cant find label for ', dst_File)
+    """
+    Retreive the Dexa score labels by matching the MRN of the radiograph to the MRN of the DEXA study
+    """
+
+    # Get the MRN
+    mrn = int(header['tags'].PatientID)
+    mrn = str(mrn)
+
+    # Get the dexa scores
+    try: densities = labels[mrn]
+    except Exception as e:
+        print('Dexa score error: ', e)
         return
+
+    # We want to use the average of the available scores
+    _tot, _sum = 0, 0
+
+    # Loop and retreive values only if they exist
+    for i, v in densities.items():
+        if v and i != 'Acc':
+            _sum += float(v)
+            _tot += 1
+
+    # Now collect the average, some have no densities saved
+    try: density = _sum / _tot
+    except: return
 
     # Normalize image
     image = sdl.adaptive_normalization(image).astype(np.float32)
 
-    # Shuttle image to GPU
-    #image = cp.asarray(image)
-
-    """
-        Generate the anchor boxes here depending on wrist or hand XR
-        Interestingly, base it off the original size of the bbox as normalized size varies much more
-    """
-    if 'WRIST' in part:
-        sh, sw, rat, ratSD, scaSD = 125.8, 122.2, 1.06, 0.232 * 1.25, (19.5 / 125.8 + 24.18 / 122.2) / 2
-    else:
-        sh, sw, rat, ratSD, scaSD = 122.3, 127.7, 0.98, 0.196 * 1.25, (17.1 / 122.3 + 24.3 / 127.7) / 2
-
-    anchors = Utils.generate_anchors(image, [sh, sw], 10, ratios=[rat - ratSD, rat, rat + ratSD],
+    # Avg height, width, ratio. STD of ratio and scale
+    sh, sw, rat, ratSD, scaSD = 318.2, 293.647, 1.1, 0.196 * 1.25, (59.444 / 318.2 + 56.600 / 293.647) / 2
+    anchors = Utils.generate_anchors(image, [sh, sw], 16, ratios=[rat - ratSD, rat, rat + ratSD],
                                      scales=[1 - scaSD, 1.0, 1 + scaSD])
 
     # Generate a dummy GT Box
     ms = image.shape
-    gtbox = cp.asarray([1, 1, 1, 1, 1, 1, 1, 1])
 
     # Append dummy zero IOUs
     IOUs = cp.expand_dims(cp.zeros_like(anchors[:, 1]), -1)
@@ -357,7 +207,7 @@ def pre_proc_localizations(box_dims, file, labels, group='proposals'):
         # Generate a box at this location
         anchor_box, _ = gut.generate_box(image, an[4:6].astype(cp.int16), an[6:8].astype(cp.int16), dim3d=False)
 
-        # Reshape the box to a standard dimension: 128x128
+        # Reshape the box to a standard dimension
         anchor_box = sdl.zoom_2D(anchor_box, [box_dims, box_dims]).astype(cp.float16)
 
         # Norm the anchor box dimensions
@@ -372,11 +222,10 @@ def pre_proc_localizations(box_dims, file, labels, group='proposals'):
         object_class = 0
 
         # Append object class and fracture class to box data
-        box_data = cp.append(box_data, [object_class, fracture_class]).astype(cp.float32)
+        box_data = cp.append(box_data, [object_class, density]).astype(cp.float32)
 
         # Save the data to [0ymin, 1xmin, 2ymax, 3xmax, cny, cnx, 6height, 7width, 8origshapey, 9origshapex,
         #    10yamin, 11xamin, 12yamax, 13xamax, 14acny, 15acnx, 16aheight, 17awidth, IOU, obj_class, #_class]
-        # data[index] = {'data': cp.asnumpy(anchor_box), 'box_data': cp.asnumpy(box_data), 'group': group, 'view': dst_File, 'accno': accno}
         data[index] = {'data': anchor_box, 'box_data': box_data, 'group': group, 'view': dst_File, 'accno': accno}
 
         # Increment box count
@@ -385,20 +234,19 @@ def pre_proc_localizations(box_dims, file, labels, group='proposals'):
         # Garbage
         del anchor_box, an, box_data
 
-    # Increment patient counters
-    del image
-
+    # Save the temporary proposals
     sdl.save_dict_filetypes(data[0], (tfrecords_dir + 'filetypes_tmp'))
-    sdl.save_tfrecords(data, 1, file_root=('%s/PROPS' %tfrecords_dir))
+    sdl.save_tfrecords(data, 1, file_root=('%sProposals_tmp' %tfrecords_dir))
 
-    del data
-    return index, dst_File, fracture_class
+    # Garbage collection
+    del data, image
+    return index, dst_File, density
 
 
 def load_protobuf(batch_size):
 
     """
-    Loads the protocol buffer
+    Loads the temporary protocol buffer with proposal boxes
     """
 
     # Saved the data to [0ymin, 1xmin, 2ymax, 3xmax, cny, cnx, 6height, 7width, 8origshapey, 9origshapex,
@@ -454,7 +302,7 @@ class DataPreprocessor(object):
 
 def inference(iterator, epoch_size, batch_size, index):
 
-    # Run default graph on GPU 1 always
+    # Run default graph
     with tf.device('/gpu:' + str(FLAGS.GPU)):
 
         # Define phase of training
@@ -470,7 +318,7 @@ def inference(iterator, epoch_size, batch_size, index):
         all_logits = network.forward_pass_RPN(data['data'], phase_train=phase_train)
 
         # Labels and logits
-        softmax = tf.nn.softmax(all_logits[0])
+        softmax = tf.nn.softmax(all_logits)
 
         # Initialize variables operation
         var_init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
@@ -511,7 +359,6 @@ def inference(iterator, epoch_size, batch_size, index):
                     """
                     Our goal is to take all the positive indices predicted and save all of the data for classification
                     Don't use anything that requires knowlege of the actual label
-                    Maybe save only the 10 most positive examples?? Dunno, bigly.
                     """
 
                     # Load what we need
@@ -555,9 +402,8 @@ def inference(iterator, epoch_size, batch_size, index):
 
 
 def main(argv=None):
-    # execute()
-    # execute_Test()
-    execute_hedge()
+    generate_object_proposals(True)
+    generate_object_proposals(False)
 
 if __name__ == '__main__':
     tf.app.run()

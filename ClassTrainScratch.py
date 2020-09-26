@@ -11,12 +11,7 @@ import tensorflow as tf
 import SODLoader as SDL
 from Input import sdd as sdd
 
-# Define the data directory to use
-home_dir = '/home/stmutasa/Code/Datasets/Scaphoid/'
-tfrecords_dir = home_dir + 'tfrecords/train/'
-
-sdl= SDL.SODLoader('/home/stmutasa/Code/Datasets/Scaphoid/')
-
+sdl= SDL.SODLoader('/data/Datasets/DEXA/')
 
 # Define flags
 FLAGS = tf.app.flags.FLAGS
@@ -26,14 +21,13 @@ tf.app.flags.DEFINE_string('data_dir', 'data/train/', """Path to the data direct
 tf.app.flags.DEFINE_integer('box_dims', 64, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 64, """dimensions of the network input""")
 tf.app.flags.DEFINE_integer('repeats', 10, """epochs to repeat before reloading""")
-tf.app.flags.DEFINE_string('net_type', 'RPNC', """Network predicting CEN, BBOX or RPN""")
 
 # Define some of the immutable variables
 tf.app.flags.DEFINE_integer('num_epochs', 600, """Number of epochs to run""")
 tf.app.flags.DEFINE_integer('epoch_size', 143360, """Classifier is less data""")
 tf.app.flags.DEFINE_integer('print_interval', 5, """How often to print a summary to console during training""")
 tf.app.flags.DEFINE_float('checkpoint_interval', 10, """How many Epochs to wait before saving a checkpoint""")
-tf.app.flags.DEFINE_integer('batch_size', 1024, """Number of images to process in a batch.""")
+tf.app.flags.DEFINE_integer('batch_size', 512, """Number of images to process in a batch.""")
 
 # Hyperparameters:
 tf.app.flags.DEFINE_float('dropout_factor', 0.75, """ Keep probability""")
@@ -41,7 +35,7 @@ tf.app.flags.DEFINE_float('l2_gamma', 1e-3, """ The gamma value for regularizati
 tf.app.flags.DEFINE_float('moving_avg_decay', 0.999, """ The decay rate for the moving average tracker""")
 
 # Hyperparameters to control the optimizer
-tf.app.flags.DEFINE_float('learning_rate',2e-3, """Initial learning rate""")
+tf.app.flags.DEFINE_float('learning_rate',1e-4, """Initial learning rate""")
 tf.app.flags.DEFINE_float('beta1', 0.9, """ The beta 1 value for the adam optimizer""")
 tf.app.flags.DEFINE_float('beta2', 0.999, """ The beta 1 value for the adam optimizer""")
 
@@ -67,18 +61,17 @@ def train():
         data['data'] = tf.reshape(data['data'], [FLAGS.batch_size, FLAGS.network_dims, FLAGS.network_dims, 1])
 
         # Perform the forward pass:
-        logits = network.forward_pass_RPN(data['data'], phase_train=phase_train)
+        predicted_density = network.forward_pass_RPN(data['data'], phase_train=phase_train)
         l2loss = network.sdn.calc_L2_Loss(FLAGS.l2_gamma)
 
         # Labels and logits
         labels = data['box_data']
 
         # Calculate loss
-        SCE_loss = network.total_loss(logits, labels)
-        softmax = tf.nn.softmax(logits)
+        MSE_loss = network.total_loss(predicted_density, labels)
 
         # Add the L2 regularization loss
-        TOT_loss = tf.add(SCE_loss, l2loss, name='TotalLoss')
+        TOT_loss = tf.add(MSE_loss, l2loss, name='TotalLoss')
 
         # Update the moving average batch norm ops
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -155,17 +148,13 @@ def train():
                     if i % print_interval == 0:
 
                         # Load some metrics
-                        _lbls, _logs, _clsLoss, _l2loss, _totLoss, _id = mon_sess.run([
-                            labels, softmax, SCE_loss, l2loss, TOT_loss, data['view']],
+                        _labels, _predicted_density, _mse_loss, _l2loss, _totLoss, _id = mon_sess.run([
+                            labels, predicted_density, MSE_loss, l2loss, TOT_loss, data['view']],
                             feed_dict={phase_train: True})
 
                         # Make losses display in ppt
                         _totLoss *= 1e3
                         _l2loss *= 1e3 * FLAGS.l2_gamma
-                        _clsLoss *= 1e3
-
-                        # Positive count
-                        pct = np.sum(_lbls[:, 20])
 
                         # Get timing stats
                         elapsed = timer / print_interval
@@ -183,9 +172,7 @@ def train():
                         # Print the data
                         print('-' * 70)
                         print('\nEpoch %d, Losses: L2:%.3f, Class:%.3f -- (%.1f eg/s), Total Loss: %.3f '
-                              % (Epoch, _l2loss, _clsLoss, FLAGS.batch_size / elapsed, _totLoss))
-
-                        print('*** Pos in Batch %s of %s,  Labels/Logits: ***' % (pct, FLAGS.batch_size))
+                              % (Epoch, _l2loss, _mse_loss, FLAGS.batch_size / elapsed, _totLoss))
 
                         # Run a session to retrieve our summaries
                         summary = mon_sess.run(all_summaries, feed_dict={phase_train: True})
@@ -194,7 +181,7 @@ def train():
                         summary_writer.add_summary(summary, i)
 
                         # Garbage cleanup
-                        del _lbls, _logs, _clsLoss, _l2loss, _totLoss, _id
+                        del _labels, _predicted_density, _mse_loss, _l2loss, _totLoss, _id
 
                     if i % checkpoint_interval == 0:
 

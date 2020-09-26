@@ -8,11 +8,7 @@ import SOD_Display as SDD
 import numpy as np
 import os
 
-# Define the data directory to use
-home_dir = '/home/stmutasa/Code/Datasets/Scaphoid/'
-tfrecords_dir = home_dir + 'tfrecords/test/'
-
-sdl= SDL.SODLoader('/home/stmutasa/Code/Datasets/Scaphoid/')
+sdl= SDL.SODLoader('/data/Datasets/DEXA/')
 sdd = SDD.SOD_Display()
 
 _author_ = 'Simi'
@@ -34,7 +30,6 @@ tf.app.flags.DEFINE_float('moving_avg_decay', 0.999, """ The decay rate for the 
 
 # Directory control
 tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory where to retrieve checkpoint files""")
-tf.app.flags.DEFINE_string('net_type', 'RPNC', """Network predicting CEN or BBOX""")
 tf.app.flags.DEFINE_string('RunInfo', 'ClassCp/', """Unique file name for this training run""")
 tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
 
@@ -55,11 +50,10 @@ def test():
         data['data'] = tf.reshape(data['data'], [FLAGS.batch_size, FLAGS.network_dims, FLAGS.network_dims, 1])
 
         # Perform the forward pass:
-        logits = network.forward_pass_RPN(data['data'], phase_train=phase_train)
+        predicted_densities = network.forward_pass_RPN(data['data'], phase_train=phase_train)
 
         # Labels and logits
         labels = data['box_data']
-        softmax = tf.nn.softmax(logits)
 
         # Initialize variables operation
         var_init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
@@ -74,7 +68,7 @@ def test():
         saver = tf.train.Saver(var_restore, max_to_keep=2)
 
         # Trackers for best performers
-        best_score, best_epoch = 0.1, 0
+        best_score, best_epoch = 20, 0
 
         # Allow memory placement growth
         config = tf.ConfigProto(log_device_placement=False, allow_soft_placement=True)
@@ -94,34 +88,35 @@ def test():
                 print("*** Testing Checkpoint %s Run %s on GPU %s ****" % (checkpoint, FLAGS.RunInfo, FLAGS.GPU))
 
                 # Init stats
-                TP, TN, FP, FN, step = 0, 0, 0, 0, 0
+                step = 0
 
                 # Set the max step count
                 max_steps = int(FLAGS.epoch_size / FLAGS.batch_size)
 
                 # Tester instance
-                sdt = SDT.SODTester(True, False)
+                sdt = SDT.SODTester(False, True)
 
                 try:
                     while step < max_steps:
 
                         # Load some metrics for testing
-                        __lbls, __smx, __accno, __obj = mon_sess.run([labels[:, 20], softmax, data['accno'], data['obj_prob']], feed_dict={phase_train: False})
+                        __labels, __predicted_densities, __accnos, __object_probs = \
+                            mon_sess.run([labels[:, 20], predicted_densities, data['accno'], data['obj_prob']], feed_dict={phase_train: False})
 
                         # Combine metrics
                         if step == 0:
-                            _lbls = np.copy(__lbls)
-                            _smx = np.copy(__smx)
-                            _obj = np.copy(__obj)
-                            _accnos = np.copy(__accno.astype('U13'))
+                            _labels = np.copy(__labels)
+                            _predicted_densities = np.copy(__predicted_densities)
+                            _object_probs = np.copy(__object_probs)
+                            _accnos = np.copy(__accnos.astype('U13'))
                         else:
-                            _lbls = np.concatenate([_lbls, __lbls])
-                            _smx = np.concatenate([_smx, __smx])
-                            _obj = np.concatenate([_obj, __obj])
-                            _accnos = np.concatenate([_accnos, __accno])
+                            _labels = np.concatenate([_labels, __labels])
+                            _predicted_densities = np.concatenate([_predicted_densities, __predicted_densities])
+                            _object_probs = np.concatenate([_object_probs, __object_probs])
+                            _accnos = np.concatenate([_accnos, __accnos])
 
                         # Increment step
-                        del __lbls, __smx, __accno, __obj
+                        del __labels, __predicted_densities, __accnos, __object_probs
                         step += 1
 
                 except tf.errors.OutOfRangeError:
@@ -130,8 +125,7 @@ def test():
                 finally:
 
                     # Combine metrics
-                    # print (len(np.unique(_accnos)))
-                    _data, _labels, _softmax = combine_predictions(_lbls, _smx, _accnos, _obj, FLAGS.batch_size, sdt)
+                    _data, _labels, _softmax = combine_predictions(_labels, _predicted_densities, _accnos, _object_probs, FLAGS.batch_size, sdt)
 
                     # Retreive the scores
                     sdt.calculate_metrics(_softmax, _labels, 1, step)
@@ -159,7 +153,7 @@ def test():
                         best_epoch = Epoch
 
                     # Shut down the session
-                    del _data, _labels, _softmax, _lbls, _smx, _accnos, _obj
+                    del _data, _labels, _softmax, _labels, _predicted_densities, _accnos, _object_probs
                     mon_sess.close()
 
 

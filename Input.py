@@ -66,29 +66,6 @@ def pre_proc_localizations(box_dims=64, thresh=0.6):
         base = os.path.basename(file).split('.')[0].split('_')
         acc, laterality, part = base
 
-        # Get the MRN, this is how we match the DEXA to the Hip radiograph
-        mrn = int(header['tags'].PatientID)
-        mrn = str(mrn)
-
-        # Get the dexa scores
-        try: densities = dexa_scores[mrn]
-        except Exception as e:
-            print('Dexa score error: ', e)
-            continue
-
-        # We want to use the average of the available scores
-        _tot, _sum = 0, 0
-
-        # Loop and retreive values only if they exist
-        for i, v in densities.items():
-            if v and i != 'Acc':
-                _sum += float(v)
-                _tot += 1
-
-        # Now collect the average, some have no densities saved
-        try: density = _sum/_tot
-        except: continue
-
         # Now retreive the ground truth boxes
         dst_File = os.path.basename(file).split('.')[0] + '.png'
         try: annotations = gtboxes[dst_File]

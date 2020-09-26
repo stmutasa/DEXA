@@ -12,8 +12,8 @@ import SODLoader as SDL
 from Input import sdd as sdd
 
 # Define the data directory to use
-home_dir = '/home/stmnarf316/PycharmProjects/DEXA/data'
-tfrecords_dir = home_dir + '/train/'
+home_dir = '/home/stmnarf316/PycharmProjects/DEXA/data/'
+tfrecords_dir = home_dir + 'train/'
 
 sdl= SDL.SODLoader('/home/stmnarf316/PycharmProjects/DEXA/data')
 
@@ -27,7 +27,6 @@ tf.app.flags.DEFINE_string('training_dir', 'training/', """Path to the training 
 tf.app.flags.DEFINE_integer('box_dims', 64, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 64, """dimensions of the network input""")
 tf.app.flags.DEFINE_integer('repeats', 20, """epochs to repeat before reloading""")
-tf.app.flags.DEFINE_string('net_type', 'RPNC', """Network predicting CEN, BBOX or RPN""")
 
 # Define some of the immutable variables
 tf.app.flags.DEFINE_integer('num_epochs', 202, """Number of epochs to run""")
@@ -76,10 +75,10 @@ def train():
         logits = tf.nn.softmax(all_logits)
 
         # Calculate loss
-        combined_loss = network.total_loss(all_logits, labels)
+        class_loss = network.total_loss(all_logits, labels)
 
         # Add the L2 regularization loss
-        loss = tf.add(combined_loss, l2loss, name='TotalLoss')
+        loss = tf.add(class_loss, l2loss, name='TotalLoss')
 
         # Update the moving average batch norm ops
         extra_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -163,16 +162,14 @@ def train():
                     if i % print_interval == 0:
 
                         # Load some metrics
-                        _lbls, _logs, _combinedLoss, _clsLoss, _locLoss, _l2loss, _totLoss, _id = mon_sess.run([
-                            labels, logits, combined_loss, l2loss, loss, data['view']],
+                        _lbls, _logs, _class_loss, _l2loss, _totLoss, _id = mon_sess.run([
+                            labels, logits, class_loss, l2loss, loss, data['view']],
                             feed_dict={phase_train: True})
 
                         # Make losses display in ppt
                         _totLoss *= 1e3
-                        _combinedLoss *= 1e3
+                        _class_loss *= 1e3
                         _l2loss *= 1e3 * FLAGS.l2_gamma
-                        _clsLoss *= 1e3
-                        _locLoss *= 1e3
 
                         # Positive count
                         pct = np.sum(_lbls[:, 19])
@@ -209,8 +206,8 @@ def train():
 
                         # Print the data
                         print('-' * 70)
-                        print('\nEpoch %d, Losses: L2:%.3f, Comb:%.3f, Class:%.3f, Loc:%.3f,  (%.1f eg/s), Total Loss: %.3f '
-                              % (Epoch, _l2loss, _combinedLoss, _clsLoss, _locLoss, FLAGS.batch_size / elapsed, _totLoss))
+                        print('\nEpoch %d, Losses: L2:%.3f, Classification:%.3f, (%.1f eg/s), Total Loss: %.3f '
+                              % (Epoch, _l2loss, _class_loss, FLAGS.batch_size / elapsed, _totLoss))
 
                         # Print the stats
                         print('*** Sn:%.3f, Sp:%.3f, PPv:%.3f, NPv:%.3f ***' % (SN, SP, PPV, NPV))
@@ -218,7 +215,7 @@ def train():
 
                         # Print examples
                         print('*** Pos in Batch %s of %s,  Labels/Logits: ***' % (pct, FLAGS.batch_size))
-                        for z in range(0, 1000, 100):
+                        for z in range(0, 500, 50):
                             print('%s -- Class Label: %s, Pred %s %s' % (
                             _id[z], _lblsCls[z], np.argmax(_logs[z]), _logs[z]))
 
@@ -229,7 +226,7 @@ def train():
                         summary_writer.add_summary(summary, i)
 
                         # Garbage cleanup
-                        del _lbls, _logs, _combinedLoss, _clsLoss, _l2loss, _totLoss, _id
+                        del _lbls, _logs, _class_loss, _l2loss, _totLoss, _id
 
                     if i % checkpoint_interval == 0:
 

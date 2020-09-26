@@ -12,10 +12,10 @@ import glob
 import numpy as np
 
 # Define the data directory to use
-home_dir = '/home/stmutasa/Code/Datasets/Scaphoid/'
-tfrecords_dir = home_dir + 'tfrecords/test/'
+home_dir = '/home/stmnarf316/PycharmProjects/DEXA/data/'
+tfrecords_dir = home_dir + 'test/'
 
-sdl= SDL.SODLoader('/home/stmutasa/Code/Datasets/Scaphoid/')
+sdl= SDL.SODLoader('/home/stmnarf316/PycharmProjects/DEXA/data')
 sdd = SDD.SOD_Display()
 
 _author_ = 'Simi'
@@ -28,8 +28,8 @@ tf.app.flags.DEFINE_string('data_dir', tfrecords_dir, """Path to the data direct
 tf.app.flags.DEFINE_string('training_dir', 'training/', """Path to the training directory.""")
 tf.app.flags.DEFINE_integer('box_dims', 64, """dimensions to save files""")
 tf.app.flags.DEFINE_integer('network_dims', 64, """dimensions of the network input""")
-tf.app.flags.DEFINE_integer('epoch_size', 2449062, """How many examples""")
-tf.app.flags.DEFINE_integer('batch_size', 5301, """Number of images to process in a batch.""")
+tf.app.flags.DEFINE_integer('epoch_size', 6525836, """How many examples""")
+tf.app.flags.DEFINE_integer('batch_size', 4094, """Number of images to process in a batch.""")
 
 # Hyperparameters:
 tf.app.flags.DEFINE_float('dropout_factor', 0.75, """ Keep probability""")
@@ -38,8 +38,8 @@ tf.app.flags.DEFINE_float('moving_avg_decay', 0.999, """ The decay rate for the 
 # Directory control
 tf.app.flags.DEFINE_string('train_dir', 'training/', """Directory where to retrieve checkpoint files""")
 tf.app.flags.DEFINE_string('net_type', 'RPNC', """Network predicting CEN or BBOX""")
-tf.app.flags.DEFINE_string('RunInfo', 'RPN_FL2/', """Unique file name for this training run""")
-tf.app.flags.DEFINE_integer('GPU', 1, """Which GPU to use""")
+tf.app.flags.DEFINE_string('RunInfo', 'RPN_FL1/', """Unique file name for this training run""")
+tf.app.flags.DEFINE_integer('GPU', 0, """Which GPU to use""")
 
 # Define a custom training class
 def test():
@@ -64,7 +64,7 @@ def test():
 
         # Labels and logits
         labels = data['box_data']
-        logits = tf.nn.softmax(all_logits[0])
+        logits = tf.nn.softmax(all_logits)
 
         # Initialize variables operation
         var_init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
@@ -80,9 +80,6 @@ def test():
 
         # Trackers for best performers
         best_SN, best_epoch = 0.1, 0
-
-        # Tester instance
-        sdt = SDT.SODTester(False, True)
 
         while True:
 

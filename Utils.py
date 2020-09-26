@@ -170,6 +170,7 @@ def process_raw():
 
 
 def filter_DICOM(file, show_debug=False):
+
     """
     Loads the DICOM image, filters by what body part and view we want, then returns the info
     :return:
@@ -196,14 +197,18 @@ def filter_DICOM(file, show_debug=False):
             try:
                 if 'LEFT' in header['tags'].StudyDescription.upper():
                     laterality = 'L'
-                else:
+                elif 'RIGHT' in header['tags'].StudyDescription.upper():
                     laterality = 'R'
+                else:
+                    laterality = 'B'
             except:
                 try:
                     if 'LEFT' in header['tags'].SeriesDescription.upper():
                         laterality = 'L'
-                    else:
+                    elif 'RIGHT' in header['tags'].SeriesDescription.upper():
                         laterality = 'R'
+                    else:
+                        laterality = 'B'
                 except:
                     try:
                         if 'BILATERAL' in header['tags'].StudyDescription.upper():
@@ -244,7 +249,7 @@ def filter_DICOM(file, show_debug=False):
     # Skip laterals again, this time by DICOM header
     if 'LAT' in view.upper(): return
 
-    # PART: WRIST, HAND
+    # PART: HIP, PELVIS
     try:
         if 'HIP' in header['tags'].StudyDescription.upper():
             part = 'HIP'
@@ -263,7 +268,7 @@ def filter_DICOM(file, show_debug=False):
             print('Part error: %s' % e)
             return
 
-    # Skip non wrists or hands
+    # Skip non hip or non pelvis
     if 'HIP' not in part and 'PELVIS' not in part:
         print('Skipping: %s file in %s' % (part, os.path.basename(file)))
         return
