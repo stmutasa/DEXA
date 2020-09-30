@@ -251,9 +251,6 @@ def train():
 
 
 def main(argv=None):
-    if tf.gfile.Exists(FLAGS.train_dir + FLAGS.RunInfo):
-        tf.gfile.DeleteRecursively(FLAGS.train_dir + FLAGS.RunInfo)
-    tf.gfile.MakeDirs(FLAGS.train_dir + FLAGS.RunInfo)
     train()
 
 

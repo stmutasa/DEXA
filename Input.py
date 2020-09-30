@@ -44,12 +44,10 @@ def pre_proc_localizations(box_dims=64, thresh=0.6):
 
     # Load the files and randomly shuffle them
     filenames = sdl.retreive_filelist('dcm', True, cleanCR_folder)
-    dexa_scores = sdl.load_CSV_Dict('Mrn', 'Dexa_Scores.csv')
     gtboxes = sdl.load_CSV_Dict('filename', 'Dexa_gtboxes.csv')
 
     # Global variables
     display, counter, data, data_test, index, pt = [], [0, 0], {}, {}, 0, 0
-    heights, weights = [], []
     wards, lap_count = 0, 0
 
     for file in filenames:

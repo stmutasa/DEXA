@@ -11,7 +11,6 @@ import time, os
 import Utils
 import SODLoader as SDL
 import SOD_Display as SDD
-import GPU_Utils as gut
 import LocModel as network
 
 from random import shuffle
@@ -67,7 +66,8 @@ def generate_object_proposals(train=True):
 
     # Display info
     totimg = len(filenames)
-    print ('Found %s image files and %s test labels, ...starting' %(totimg, len(Labels)))
+    shuffle(filenames)
+    print ('Found %s image files and %s labels, ...starting' %(totimg, len(Labels)))
     time.sleep(3)
 
     # Global variables
@@ -77,7 +77,7 @@ def generate_object_proposals(train=True):
     for file in filenames:
 
         # Save protobuff and get epoch size
-        try: epoch_size, ID, cls = pre_proc_localizations(64, file, Labels, group='train')
+        try: epoch_size, ID = pre_proc_localizations(64, file, Labels, group='train')
         except: continue
 
         # Get factors of epoch size for batch size and return number closest to 1k
@@ -98,16 +98,17 @@ def generate_object_proposals(train=True):
             # Sort items by obj_prob in iterated list. Use reverse to get biggest first, take n with slicing then make dict
             result_dict = dict(sorted(result_dict.items(), key=lambda x: x[1]['obj_prob'], reverse=True)[:top_n])
 
-            # # TODO: display box code
-            # display = []
-            # for i, v in result_dict.items(): display.append(np.squeeze(v['data'].astype(np.float32)))
-            # sdd.display_volume(display, True)
-
         # Merge dictionaries
         data.update(result_dict)
 
-        # Update count
-        counter[cls] += len(result_dict)
+        # Increment counter
+        counter[0] += 1
+
+        # # TODO: display box code
+        # display = []
+        # for i, v in result_dict.items(): display.append(np.squeeze(v['data'].astype(np.float32)))
+        # try: sdd.display_volume(display, False)
+        # except: continue
 
         # Display
         print ('\n *** Made %s boxes of wards triangle from %s proposals in image %s (IMG %s of %s, Objects so far: %s)*** \n'
@@ -121,7 +122,8 @@ def generate_object_proposals(train=True):
     # Done with all patients, save
     print('\nMade %s Object Proposal boxes from %s Test images, Avg %s.' % (len(data), procd, len(data)//procd))
     sdl.save_dict_filetypes(data[next(iter(data))], (tfrecords_dir + 'filetypes'))
-    sdl.save_segregated_tfrecords(5, data, 'accno', file_root='data')
+    if train: sdl.save_segregated_tfrecords(5, data, 'accno', file_root='data/train/')
+    else: sdl.save_segregated_tfrecords(5, data, 'accno', file_root='data/test/')
 
 
 def factors(n):
@@ -151,7 +153,7 @@ def pre_proc_localizations(box_dims, file, labels, group='proposals'):
 
     # Set destination filename info
     #dst_File = accno + '_' + laterality + '-' + part + '_' + view
-    dst_File = os.path.basename(file).split('.')[0] + '.png'
+    dst_File = os.path.basename(file).split('.')[0]
 
     """
     Retreive the Dexa score labels by matching the MRN of the radiograph to the MRN of the DEXA study
@@ -205,7 +207,7 @@ def pre_proc_localizations(box_dims, file, labels, group='proposals'):
         an = an.astype(cp.float32)
 
         # Generate a box at this location
-        anchor_box, _ = gut.generate_box(image, an[4:6].astype(cp.int16), an[6:8].astype(cp.int16), dim3d=False)
+        anchor_box, _ = sdl.generate_box(image, an[4:6].astype(cp.int16), an[6:8].astype(cp.int16), dim3d=False)
 
         # Reshape the box to a standard dimension
         anchor_box = sdl.zoom_2D(anchor_box, [box_dims, box_dims]).astype(cp.float16)
@@ -240,7 +242,7 @@ def pre_proc_localizations(box_dims, file, labels, group='proposals'):
 
     # Garbage collection
     del data, image
-    return index, dst_File, density
+    return index, dst_File
 
 
 def load_protobuf(batch_size):
@@ -363,6 +365,10 @@ def inference(iterator, epoch_size, batch_size, index):
 
                     # Load what we need
                     _softmax, _data = mon_sess.run([softmax, data], feed_dict={phase_train: False})
+
+                    # TODO: Add 0.3 to class 2 because wtf
+                    for z in range (len(_softmax[0])):
+                        _softmax[z,1] = _softmax[0, 1] + 0.3
 
                     # Only keep positive
                     class_preds = np.argmax(_softmax, axis=1)

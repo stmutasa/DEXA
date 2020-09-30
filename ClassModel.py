@@ -79,7 +79,7 @@ def total_loss(logits, labels):
     """
 
     # Must squeeze because otherwise we are subtracting a row vector from a column vector giving a matrix
-    labels = tf.squeeze(labels)
+    labels = tf.cast(tf.squeeze(labels), tf.float32)
     logits = tf.squeeze(logits)
 
     # Calculate MSE with the factor multiplied in
