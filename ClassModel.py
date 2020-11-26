@@ -44,24 +44,39 @@ def forward_pass_RPN(images, phase_train):
     images = tf.cast(images, tf.float32)
 
     # Inputs = batchx64x64x64
-    K = 8
-    conv = sdn.residual_layer('Conv1', images, 3, K, S=1, phase_train=phase_train) # 64
-    conv = sdn.inception_layer('Conv1ds', conv, K * 2, S=2, phase_train=phase_train) # 32
+    K = 16
+    conv = sdn.residual_layer('Conv1', images, 3, K, S=1, phase_train=phase_train)  # 64
+    conv = sdn.inception_layer('Conv1ds', conv, K * 2, S=2, phase_train=phase_train)  # 32
 
     conv = sdn.residual_layer('Conv2a', conv, 3, K * 2, 1, phase_train=phase_train)
+    conv = sdn.residual_layer('Conv2b', conv, 3, K * 2, 1, phase_train=phase_train)
     conv = sdn.inception_layer('Conv2ds', conv, K * 4, S=2, phase_train=phase_train)  # 16
 
     conv = sdn.residual_layer('Conv3a', conv, 3, K * 4, 1, phase_train=phase_train)
+    conv = sdn.residual_layer('Conv3b', conv, 3, K * 4, 1, phase_train=phase_train)
+    conv = sdn.residual_layer('Conv3c', conv, 3, K * 4, 1, phase_train=phase_train)
     conv = sdn.inception_layer('Conv3ds', conv, K * 8, S=2, phase_train=phase_train)  # 8
 
     conv = sdn.residual_layer('Conv4a', conv, 3, K * 8, 1, phase_train=phase_train)
     conv = sdn.inception_layer('Conv4b', conv, K * 8, S=1, phase_train=phase_train)
+    conv = sdn.residual_layer('Conv4c', conv, 3, K * 8, 1, phase_train=phase_train)
+    conv = sdn.residual_layer('Conv4d', conv, 3, K * 8, 1, phase_train=phase_train)  # Smaller net here
+    conv = sdn.residual_layer('Conv4e', conv, 3, K * 8, 1, phase_train=phase_train)
     conv = sdn.residual_layer('Conv4f', conv, 3, K * 8, 1, phase_train=phase_train)
+    conv = sdn.residual_layer('Conv4g', conv, 3, K * 8, 1, phase_train=phase_train)
+    conv = sdn.residual_layer('Conv4h', conv, 3, K * 8, 1, phase_train=phase_train)  # Smaller End Here
 
+    # At this point split into classifier and regressor
     convC = sdn.inception_layer('ConvC1', conv, K * 16, S=2, phase_train=phase_train)  # 4
     convC = sdn.residual_layer('ConvC2', convC, 3, K * 16, 1, phase_train=phase_train)
     convC = sdn.residual_layer('ConvC3', convC, 3, K * 16, 1, phase_train=phase_train)
     convC = sdn.residual_layer('ConvC4', convC, 3, K * 16, 1, phase_train=phase_train)
+    convC = sdn.residual_layer('ConvC5', convC, 3, K * 16, 1, phase_train=phase_train)
+    convC = sdn.residual_layer('ConvC6', convC, 3, K * 16, 1, phase_train=phase_train)
+    convC = sdn.residual_layer('ConvC7', convC, 3, K * 16, 1, phase_train=phase_train)
+    convC = sdn.residual_layer('ConvC8', convC, 3, K * 16, 1, phase_train=phase_train)
+    convC = sdn.residual_layer('ConvC9', convC, 3, K * 16, 1, phase_train=phase_train)
+    convC = sdn.residual_layer('ConvC10', convC, 3, K * 16, 1, phase_train=phase_train)
     linearC = sdn.fc7_layer('FC7c', convC, 8, True, phase_train, FLAGS.dropout_factor, override=3, BN=True)
     linearC = sdn.linear_layer('LinearC', linearC, 4, True, phase_train, FLAGS.dropout_factor, BN=True)
     LogitsC = sdn.linear_layer('SoftmaxC', linearC, 1, relu=False, add_bias=False, BN=False)
@@ -81,6 +96,7 @@ def total_loss(logits, labels):
     # Must squeeze because otherwise we are subtracting a row vector from a column vector giving a matrix
     labels = tf.cast(tf.squeeze(labels), tf.float32)
     logits = tf.squeeze(logits)
+    labels = tf.transpose(labels)
 
     # Calculate MSE with the factor multiplied in
     MSE_loss = tf.reduce_mean(tf.squared_difference(labels, logits))

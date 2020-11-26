@@ -17,7 +17,6 @@ tfrecords_dir = home_dir + 'train/'
 
 sdl= SDL.SODLoader('/home/stmnarf316/PycharmProjects/DEXA/data')
 
-
 # Define flags
 FLAGS = tf.app.flags.FLAGS
 
@@ -30,7 +29,7 @@ tf.app.flags.DEFINE_integer('repeats', 20, """epochs to repeat before reloading"
 
 # Define some of the immutable variables
 tf.app.flags.DEFINE_integer('num_epochs', 202, """Number of epochs to run""")
-tf.app.flags.DEFINE_integer('epoch_size', 30145477, """30 Million in train set""")
+tf.app.flags.DEFINE_integer('epoch_size', 28022123, """30 Million in train set""")
 tf.app.flags.DEFINE_integer('print_interval', 1, """How often to print a summary to console during training""")
 tf.app.flags.DEFINE_float('checkpoint_interval', 5, """How many Epochs to wait before saving a checkpoint""")
 tf.app.flags.DEFINE_integer('batch_size', 512, """Number of images to process in a batch.""")
@@ -126,8 +125,9 @@ def train():
             # # TODO: Restore the model
             # ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir + FLAGS.RunInfo)
             # saver.restore(mon_sess, ckpt.model_checkpoint_path)
-            # print ('Model restored: ', ckpt.model_checkpoint_path)
-            # start_step = 751451
+            # start_step = 1766336
+            # print ('Model %s restored at step %s' %(ckpt.model_checkpoint_path, start_step))
+
 
             # Initialize the handle to the summary writer in our training directory
             summary_writer = tf.summary.FileWriter(FLAGS.train_dir + FLAGS.RunInfo, mon_sess.graph)

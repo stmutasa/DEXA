@@ -156,7 +156,9 @@ def pre_proc_localizations(box_dims=64, thresh=0.6):
             """
 
             # Avg height, width, ratio. STD of ratio and scale
-            sh, sw, rat, ratSD, scaSD = 318.2, 293.647, 1.1, 0.196 * 1.25, (59.444 / 318.2 + 56.600 / 293.647) / 2
+            scaling_factor=2
+            sh, sw, rat, ratSD, scaSD = 318.2*scaling_factor, 293.647*scaling_factor, 1.1, 0.196 * 1.25, \
+                                        (59.444 / 318.2 + 56.600 / 293.647) / 2
             anchors = Utils.generate_anchors(image, [sh, sw], 16, ratios=[rat - ratSD, rat, rat + ratSD],
                                              scales=[1 - scaSD, 1.0, 1 + scaSD])
 
@@ -294,10 +296,10 @@ def load_protobuf_loc(training=True):
     if training:
 
         # Define our undersample and oversample filtering functions
-        _filter_fn = lambda x: sdl.undersample_filter(x['box_data'][19], actual_dists=[0.999, 0.00156], desired_dists=[.99, .01])
+        _filter_fn = lambda x: sdl.undersample_filter(x['box_data'][19], actual_dists=[0.999808554, 0.000191], desired_dists=[.98, .02])
         _undersample_filter = lambda x: dataset.filter(_filter_fn)
         _oversample_filter = lambda x: tf.data.Dataset.from_tensors(x).repeat(
-            sdl.oversample_class(x['box_data'][19], actual_dists=[0.9982, 0.001755], desired_dists=[.99, .01]))
+            sdl.oversample_class(x['box_data'][19], actual_dists=[0.999808554, 0.000191], desired_dists=[.98, .02]))
 
         # Large shuffle, repeat for xx epochs then parse the labels only
         dataset = dataset.shuffle(buffer_size=int(5e5))
@@ -403,30 +405,30 @@ class DataPreprocessor(object):
         image = tf.expand_dims(image, -1)
         image = tf.image.resize_images(image, [FLAGS.network_dims, FLAGS.network_dims], tf.compat.v1.image.ResizeMethod.BICUBIC)
 
-        # Image rotation parameters
-        angle = tf.random_uniform([], -0.26, 0.26)
-        image = tf.contrib.image.rotate(image, angle)
+        # # Image rotation parameters
+        # angle = tf.random_uniform([], -0.26, 0.26)
+        # image = tf.contrib.image.rotate(image, angle)
 
         # Then randomly flip
-        image = tf.image.random_flip_left_right(tf.image.random_flip_up_down(image))
+        # image = tf.image.random_flip_left_right(tf.image.random_flip_up_down(image))
         #image = tf.image.random_flip_left_right(image)
 
-        # Random brightness/contrast
-        image = tf.image.random_brightness(image, max_delta=0.05)
-        image = tf.image.random_contrast(image, lower=0.95, upper=1.05)
-
-        # For noise, first randomly determine how 'noisy' this study will be
-        T_noise = tf.random.uniform([], 0, 0.05)
-
-        # Create a poisson noise array
-        noise = tf.random.uniform(shape=[FLAGS.network_dims, FLAGS.network_dims, 1], minval=-T_noise, maxval=T_noise)
-
-        # # Normalize the image
-        # image = tf.image.per_image_standardization(image)
-        # image = tf.add(image, noise)
-
-        # Add the poisson noise
-        image = tf.add(image, tf.cast(noise, tf.float16))
+        # # Random brightness/contrast
+        # image = tf.image.random_brightness(image, max_delta=0.05)
+        # image = tf.image.random_contrast(image, lower=0.95, upper=1.05)
+        #
+        # # For noise, first randomly determine how 'noisy' this study will be
+        # T_noise = tf.random.uniform([], 0, 0.05)
+        #
+        # # Create a poisson noise array
+        # noise = tf.random.uniform(shape=[FLAGS.network_dims, FLAGS.network_dims, 1], minval=-T_noise, maxval=T_noise)
+        #
+        # # # Normalize the image
+        # # image = tf.image.per_image_standardization(image)
+        # # image = tf.add(image, noise)
+        #
+        # # Add the poisson noise
+        # image = tf.add(image, tf.cast(noise, tf.float16))
 
     else: # Validation
 
@@ -442,3 +444,5 @@ class DataPreprocessor(object):
     record['data'] = image
 
     return record
+
+#pre_proc_localizations()
